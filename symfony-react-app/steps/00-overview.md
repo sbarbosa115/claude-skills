@@ -13,7 +13,8 @@ regression suite, the CI workflow, the FSD import rules and the format-on-edit h
 The whole process, in order:
 
 1. **Stack:** the tools every step below relies on.
-2. **Plan:** write down what the feature does, which layers it touches and how it will be checked.
+2. **Plan:** write down what the feature does, which layers it touches and how it will be checked. When it is big,
+   split it into items built in parallel after a contract item (§2b).
 3. **Branch:** create a feature base branch from a fresh `main` (or `master`) in its own worktree.
 4. **Build test-first:** in the backend as a Senior PHP/Symfony developer, following DDD; in the frontend as a
    React UI/UX engineer, following Feature-Sliced Design.

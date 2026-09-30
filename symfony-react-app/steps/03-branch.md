@@ -11,9 +11,11 @@ git worktree add -b feature/<name> ../<repo>-<name> "origin/$BASE"
 cd ../<repo>-<name>
 ```
 
-- **`feature/<name>` is the feature base branch.** When the feature is big, split it into sub-branches
-  (`feature/<name>-api`, `feature/<name>-ui`) cut from the base branch and merged back into it. Only the base
-  branch opens a pull request against `main`/`master`.
+- **`feature/<name>` is the feature base branch.** When the feature is split (§2b), item 0 (the contract) is built
+  on it, and every other item gets a sub-branch `feature/<name>-<slug>` in its own worktree, created by
+  `scripts/split.py start` and merged back into the base branch. (`feature/<name>/<slug>` is not possible: git cannot
+  have a branch and a folder of branches with the same name.) Only the base branch opens a pull request against
+  `main`/`master`.
 - **Use a worktree, not `git switch`.** Another session may be working in the main checkout, and switching its
   branch changes its files and carries its uncommitted work into yours.
 - If the plan or PRD sits on an unmerged branch, bring it in first (`git cherry-pick` / `git merge`) so the plan

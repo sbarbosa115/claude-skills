@@ -23,3 +23,6 @@ is big enough to need a product document. It answers five questions:
    the regression suite (§8).
 
 Also list what you are deliberately leaving out. It goes in the README's "Known gaps" section at the end.
+
+If the plan spans more than one bounded context or more than one new screen, consider splitting it into items that
+can be built in parallel (§2b) before branching.

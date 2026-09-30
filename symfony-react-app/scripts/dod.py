@@ -5,6 +5,10 @@ Run from anywhere inside the project's git checkout, with its Docker stack up:
 
     python3 ~/.claude/skills/symfony-react-app/scripts/dod.py            # everything, including gate and tests
     python3 ~/.claude/skills/symfony-react-app/scripts/dod.py --quick    # leave out the gate and the test suites
+    python3 ~/.claude/skills/symfony-react-app/scripts/dod.py --item     # one item of a split (steps/02b-split.md)
+
+An item is checked against the base branch it was cut from (split.py records it), and without the security audit
+and the regression run: those are done once, on the base branch, which fails while an item of its split is not merged.
 
 It checks what a script can check and prints the rest as MANUAL items to confirm in the report. Exit 0 only when
 nothing FAILs. Settings: PHP_SERVICE (php), NODE_SERVICE (node), APP_DIR (backend).
@@ -41,16 +45,33 @@ def git(*args: str) -> str:
     return sh('git', *args, check=True).stdout.strip()
 
 
+ITEM_MANUAL = [
+    'Only what the item owns in the split table changed; nothing in another item\'s files or the contract',
+    'Every behaviour had its test written first; another tenant gets 404 on every new id route',
+    'Backend in its bounded context: commands for writes, DomainErrors, handlers never flush, Output DTOs',
+    'Frontend in FSD layers with public APIs, types from the API schema, strings through i18n, house components',
+    'The item\'s screens opened in the browser on its own stack, no console errors',
+    'The item\'s regression cases written into docs/tests/ui-regression.md, in its ID range',
+]
+
+
 def main() -> int:
     quick = '--quick' in sys.argv
+    item = '--item' in sys.argv
     root = Path(git('rev-parse', '--show-toplevel'))
     os.chdir(root)
     try:
         base = git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD')
     except subprocess.CalledProcessError:
         base = 'origin/main'
-    base = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--base=')), base)
     branch = git('rev-parse', '--abbrev-ref', 'HEAD')
+    split_base = sh('git', 'config', f'branch.{branch}.splitBase').stdout.strip()
+    if item:
+        if not split_base:
+            print(f'dod.py --item: {branch} is not an item of a split (no branch.{branch}.splitBase; see split.py start)', file=sys.stderr)
+            return 1
+        base = split_base
+    base = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--base=')), base)
     feature = branch.removeprefix('feature/').replace('/', '-')
     merge_base = git('merge-base', base, 'HEAD')
     changed = set(git('diff', '--name-only', merge_base).splitlines()) | set(git('ls-files', '--others', '--exclude-standard').splitlines())
@@ -97,7 +118,15 @@ def main() -> int:
             check('Migrations run on dev and test', False, f'{PHP} service not running')
 
     # API schema and types regenerated when the contract may have changed
-    contract = [f for f in changed if re.search(r'/(Controller|Output|Input)/.*\.php$', f)]
+    # A controller is part of the API contract when it serves the API, not when it renders a page.
+    def api_file(f: str) -> bool:
+        if re.search(r'/(Output|Input)/.*\.php$', f):
+            return True
+        path = root / f
+        return bool(re.search(r'/Controller/.*\.php$', f)) and path.exists() and \
+            bool(re.search(r'#\[ApiResponse|Route\(\s*[\'"]/api', path.read_text()))
+
+    contract = [f for f in changed if api_file(f)]
     schema = [f for f in changed if f.endswith(('openapi.json', 'api.d.ts'))]
     if contract and list(root.glob(f'{APP_DIR}/assets/**/openapi.json')):
         check('API schema and TS types regenerated', bool(schema), '' if schema else f'{len(contract)} controller/DTO files changed, no openapi.json/api.d.ts')
@@ -106,26 +135,35 @@ def main() -> int:
     if re.search(r'^\+.*#\[Route\(', added, re.M):
         check('README updated for new routes', 'README.md' in changed)
 
-    # Security audit
-    audits = sorted((root / 'docs/security/audits').glob(f'*-{feature}.md'))
-    if not audits:
-        check('Security audit recorded', False, f'no docs/security/audits/*-{feature}.md: run audit.py')
-    else:
-        text = audits[-1].read_text()
-        open_leads = len(re.findall(r'^- \[ \]', text, re.M))
-        blocking = re.findall(r'^\|\s*\d+\s*\|\s*(Critical|High)\s*\|.*\|\s*(?!Fixed)[^|]*\|\s*$', text, re.M)
-        check('Security audit recorded', open_leads == 0, f'{open_leads} leads not resolved' if open_leads else audits[-1].name)
-        check('No open critical/high finding', not blocking, f'{len(blocking)} open' if blocking else '')
+    # Split: an item is checked on its own; the base branch only once every item is merged
+    plan = sh('git', 'config', f'branch.{branch}.splitPlan').stdout.strip()
+    if item:
+        check('Security audit and regression run', None, 'done once on the base branch')
+    elif plan:
+        res = sh(sys.executable, str(SCRIPTS / 'split.py'), 'status', plan, '--check')
+        check('Every item of the split merged', res.returncode == 0, res.stderr.strip().splitlines()[-1] if res.returncode else plan)
 
-    # Regression run
-    runs = sorted((root / 'docs/tests/runs').glob(f'*-{feature}.md')) + sorted((root / 'docs/tests/runs').glob('*-baseline.md'))
-    runs = [r for r in runs if r.name[:10] >= git('log', '-1', '--format=%cs', merge_base)]
-    if not runs:
-        check('Regression run recorded', False, f'no docs/tests/runs/*-{feature}.md: run new-run.py')
-    else:
-        # Result rows only (| ID | Not run | …), not the summary's "| Not run | N … |".
-        not_run = len(re.findall(r'^\|\s*[A-Z][A-Z0-9-]*-\d+\s*\|\s*Not run\s*\|', runs[-1].read_text(), re.M))
-        check('Regression run recorded', not_run == 0, f'{not_run} cases still "Not run"' if not_run else runs[-1].name)
+    # Security audit
+    if not item:
+        audits = sorted((root / 'docs/security/audits').glob(f'*-{feature}.md'))
+        if not audits:
+            check('Security audit recorded', False, f'no docs/security/audits/*-{feature}.md: run audit.py')
+        else:
+            text = audits[-1].read_text()
+            open_leads = len(re.findall(r'^- \[ \]', text, re.M))
+            blocking = re.findall(r'^\|\s*\d+\s*\|\s*(Critical|High)\s*\|.*\|\s*(?!Fixed)[^|]*\|\s*$', text, re.M)
+            check('Security audit recorded', open_leads == 0, f'{open_leads} leads not resolved' if open_leads else audits[-1].name)
+            check('No open critical/high finding', not blocking, f'{len(blocking)} open' if blocking else '')
+
+        # Regression run
+        runs = sorted((root / 'docs/tests/runs').glob(f'*-{feature}.md')) + sorted((root / 'docs/tests/runs').glob('*-baseline.md'))
+        runs = [r for r in runs if r.name[:10] >= git('log', '-1', '--format=%cs', merge_base)]
+        if not runs:
+            check('Regression run recorded', False, f'no docs/tests/runs/*-{feature}.md: run new-run.py')
+        else:
+            # Result rows only (| ID | Not run | …), not the summary's "| Not run | N … |".
+            not_run = len(re.findall(r'^\|\s*[A-Z][A-Z0-9-]*-\d+\s*\|\s*Not run\s*\|', runs[-1].read_text(), re.M))
+            check('Regression run recorded', not_run == 0, f'{not_run} cases still "Not run"' if not_run else runs[-1].name)
 
     # Published process doc in sync
     if (root / 'docs/feature-development.md').exists():
@@ -137,8 +175,8 @@ def main() -> int:
     for name, verdict, detail in results:
         print(f'{verdict:<5} {name:<{width}}  {detail}')
     print()
-    for item in MANUAL:
-        print(f'MANUAL {item}')
+    for manual in ITEM_MANUAL if item else MANUAL:
+        print(f'MANUAL {manual}')
     failed = [n for n, v, _ in results if v == 'FAIL']
     print(f'\n{"DONE (confirm the MANUAL items)" if not failed else f"NOT DONE: {len(failed)} failing"}')
     return 1 if failed else 0

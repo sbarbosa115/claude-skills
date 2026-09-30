@@ -13,4 +13,5 @@
 - **Pull request** from `feature/<name>` to `main`/`master`: link the plan, summarise what changed per layer,
   link the regression run file and the security audit file, and list what was not done.
 - After the merge: `docker compose down` in the worktree (add `--volumes` to drop its data) and
-  `git worktree remove ../<repo>-<name>`.
+  `git worktree remove ../<repo>-<name>`. For a split feature, do the same for every item's worktree
+  (`split.py status` lists them) and delete the merged item branches.

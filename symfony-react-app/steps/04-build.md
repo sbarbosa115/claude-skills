@@ -11,6 +11,9 @@ Name tests as sentences about behaviour (`testAnotherTenantCannotSeeTheRecord`,
 `it('disables Save until the form is valid')`), and give assertions a message that explains *why*. Those messages
 are the real documentation of the rule.
 
+**An item of a split (§2b)** builds only what its row in the split table owns, against the contract item 0 fixed,
+on its own stack. It commits on its own branch and never merges: the coordinator merges it into the base branch.
+
 ### 4.1 Backend: Symfony with DDD and hexagonal layers
 
 Work as a senior Symfony developer: thin controllers, explicit use cases, rules in the domain, framework code at

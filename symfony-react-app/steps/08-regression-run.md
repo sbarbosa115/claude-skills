@@ -6,6 +6,9 @@ as real users use it. **Every feature ends with a recorded run.**
 `scripts/new-run.py` creates the run file with every case ID of the suite listed as "Not run", and when there is
 no suite yet, it also writes the suite skeleton from `templates/ui-regression.md`. Fill it in while running.
 
+**A split feature (§2b)** records one run, on the base branch after every item is merged. Each item only writes its
+cases into the suite, in the ID range the split table gave it, and checks its own screens (§7.3).
+
 ### 8.1 A suite already exists
 
 1. **Add the feature's cases** to `ui-regression.md`, in the section of the screen they live on, in the suite's

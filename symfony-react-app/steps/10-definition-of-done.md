@@ -5,6 +5,8 @@ audit and run files, the README when routes changed) and lists the rest for you 
 the report.
 
 - [ ] A written plan: role, owning context and FSD slice, layers touched, tests and browser cases, what is left out.
+- [ ] If split (§2b): a split table that `split.py plan` accepts, item 0 built first, every item passing
+      `dod.py --item` on its own stack and merged into the base branch, which then passes everything below once.
 - [ ] Built on `feature/<name>` from a fresh `origin/main` (or `master`), in its own worktree, on its own stack.
 - [ ] Every behaviour has a test written before its code: unit for domain rules, functional for each endpoint
       (happy path, each refusal, wrong role, another tenant gets 404), component tests for UI logic.
