@@ -16,7 +16,10 @@ anything runs in parallel.** It is built on the feature base branch itself (§3)
 - the Output DTOs (and Input DTOs) of every new endpoint, with the controller routes returning a fixed example or
   `501`, and the regenerated `openapi.json` + `api.d.ts`, so the UI items build against real types;
 - the i18n namespaces, CSS files and regression-suite sections the items will fill (empty, with a comment naming
-  the item that owns each).
+  the item that owns each);
+- **a no-op handler for every new domain event**, when the event bus refuses an event without one (Messenger's
+  `NoHandlerForMessageException`): otherwise the item that publishes an event fails until the item that handles it
+  merges. The handling item replaces the no-op.
 
 Its tests cover the domain rules it adds and the shape of each response. When it is green and committed on the base
 branch, the other items start from it.
@@ -71,6 +74,11 @@ Two ways to run the items; pick one per feature:
 | Good for | Items that are well specified and mostly backend or logic | Items with UI judgement, or that need the user's decisions while built |
 | Watch | Agents do not share what they learn; the coordinator reads each report before merging. An agent's shell may start in the main checkout: every command `cd`s into the item's worktree | The user relays questions; the coordinator still does the merges |
 
+**What the coordinator does for every item:** it reads the report, opens the item's screens in the browser on the item's
+stack (agents share one browser, so they do not use it), and merges. Items cannot merge the base branch into their
+own branch (the permission system refuses `git merge` to agents), so an item is checked against the base commit it was
+cut from, and the coordinator resolves any overlap while merging, on the base branch.
+
 Either way, **each item goes through §4–§5 and §7 on its own stack**: test-first, the gate, its own screens in the
 browser, and `dod.py --item`. It adds its regression cases (in its ID range) but does not record a run, and it does not
 run the security audit: those happen once, on the merged base branch.
@@ -90,6 +98,10 @@ docker compose exec php php bin/console doctrine:migrations:migrate -n          
 A merge that breaks the base branch is fixed on the base branch right away, before the next merge. When a wave is
 merged, the next wave starts from the updated base branch (`split.py start --wave=N`).
 
+Clearing the Symfony cache while the stack's worker runs kills the worker the next time it loads a service (a queued
+email is then stuck until Messenger's redelivery timeout): restart the worker after `cache:clear`.
+
 When every item is merged, the base branch goes through the rest of the process **once**, as one feature: §6 security
 audit, §7 verify, §8 the whole regression run, §9 finish and one pull request. `dod.py` (without `--item`) fails
-while an item of the split is not merged. Then remove the items' stacks and worktrees (§9).
+while an item of the split is not merged. Remove each merged item's stack and worktree as you go, but **keep the item
+branches** until the base branch is merged into `main`: `split.py status` knows an item is merged by its branch.

@@ -411,6 +411,8 @@ all "Contract" and "Decisions").
 |---|---|---|---|
 | {item.owns} | {item.tests} | {item.cases} | {', '.join(item.depends)} |
 
+**Merging:** do not run `git merge` or `git rebase` (agents are refused them): the coordinator merges your branch.
+
 **Where:** worktree `{path}`, branch `{repo.branch(item)}`, cut from `{repo.base}`. Your shell may start somewhere
 else: begin every command with `cd {path} &&`. Use this worktree's Docker stack only{f' (app http://localhost:{http})' if http else ''}:
 bring it up first (steps/07-verify.md §7.1). Never touch the main checkout, `main`, or another item's branch.

@@ -85,8 +85,15 @@ def main() -> int:
 
     # Branch
     check('On a feature branch, not the base', branch not in ('main', 'master', base.split('/')[-1]), branch)
-    behind = sh('git', 'merge-base', '--is-ancestor', base, 'HEAD').returncode == 0
-    check(f'Up to date with {base}', behind, '' if behind else f'merge or rebase {base} into the branch')
+    if item:
+        # An item is checked against the base commit it was cut from: it cannot merge the base itself (the coordinator
+        # merges, and resolves overlaps then).
+        started = sh('git', 'config', f'branch.{branch}.splitFrom').stdout.strip() or base
+        cut = sh('git', 'merge-base', '--is-ancestor', started, 'HEAD').returncode == 0
+        check(f'Cut from {base}', cut, '' if cut else f'{branch} does not contain the commit it was started from')
+    else:
+        behind = sh('git', 'merge-base', '--is-ancestor', base, 'HEAD').returncode == 0
+        check(f'Up to date with {base}', behind, '' if behind else f'merge or rebase {base} into the branch')
 
     # Static analysis gate
     if quick:
