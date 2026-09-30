@@ -123,7 +123,8 @@ def main() -> int:
     if not runs:
         check('Regression run recorded', False, f'no docs/tests/runs/*-{feature}.md: run new-run.py')
     else:
-        not_run = len(re.findall(r'\|\s*Not run\s*\|', runs[-1].read_text()))
+        # Result rows only (| ID | Not run | …), not the summary's "| Not run | N … |".
+        not_run = len(re.findall(r'^\|\s*[A-Z][A-Z0-9-]*-\d+\s*\|\s*Not run\s*\|', runs[-1].read_text(), re.M))
         check('Regression run recorded', not_run == 0, f'{not_run} cases still "Not run"' if not_run else runs[-1].name)
 
     # Published process doc in sync
