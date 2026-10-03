@@ -33,6 +33,7 @@ MANUAL = [
     'Backend in its bounded context: commands for writes, DomainErrors, handlers never flush, Output DTOs',
     'Frontend in FSD layers with public APIs, types from the API schema, strings through i18n, house components',
     'Every new or changed screen and modal opened in the browser on this stack, no console errors',
+    'Each new regression case is a smoke test (marked "Smoke:" in the suite) or says why a person must run it',
     'README: API rows, data model decisions, known gaps; help articles if the project has them',
 ]
 
@@ -51,7 +52,7 @@ ITEM_MANUAL = [
     'Backend in its bounded context: commands for writes, DomainErrors, handlers never flush, Output DTOs',
     'Frontend in FSD layers with public APIs, types from the API schema, strings through i18n, house components',
     'The item\'s screens opened in the browser on its own stack, no console errors',
-    'The item\'s regression cases written into docs/tests/ui-regression.md, in its ID range',
+    'The item\'s regression cases written into docs/tests/ui-regression.md, in its ID range, the simple ones as smoke tests',
 ]
 
 
@@ -168,9 +169,28 @@ def main() -> int:
         if not runs:
             check('Regression run recorded', False, f'no docs/tests/runs/*-{feature}.md: run new-run.py')
         else:
+            text = runs[-1].read_text()
             # Result rows only (| ID | Not run | …), not the summary's "| Not run | N … |".
-            not_run = len(re.findall(r'^\|\s*[A-Z][A-Z0-9-]*-\d+\s*\|\s*Not run\s*\|', runs[-1].read_text(), re.M))
-            check('Regression run recorded', not_run == 0, f'{not_run} cases still "Not run"' if not_run else runs[-1].name)
+            manual = re.findall(r'^\|\s*[A-Z][A-Z0-9-]*-\d+\s*\|\s*([^|]*?)\s*\|', text, re.M)
+            not_run = sum(1 for result in manual if result == 'Not run')
+            started = len(manual) - not_run
+
+            # The smoke suite comes first: its last recorded attempt is green, on the code as it is now.
+            if (root / APP_DIR / 'e2e').is_dir() or list((root / APP_DIR).glob('playwright.config.*')):
+                attempts = re.findall(r'^\|\s*\d+\s*\|[^|]*\|\s*`([0-9a-f]+)`([^|]*)\|\s*(Green|Not green)[^|]*\|', text, re.M)
+                if not attempts:
+                    check('Smoke suite green', False, 'no attempt recorded: run smoke.py' + (' (and the manual run started before it)' if started else ''))
+                else:
+                    commit, dirty, verdict = attempts[-1]
+                    since = sh('git', 'diff', '--name-only', commit, 'HEAD', '--', '.', ':!docs', ':!README.md').stdout.split()
+                    stale = bool(since) or bool(dirty.strip())
+                    detail = (f'attempt {len(attempts)} is not green: fix what failed and run smoke.py again' if verdict != 'Green'
+                              else f'{len(since) or "uncommitted"} files changed since the green run at {commit}: run smoke.py again' if stale
+                              else f'attempt {len(attempts)} at {commit}')
+                    check('Smoke suite green', verdict == 'Green' and not stale, detail)
+                    if verdict != 'Green' and started:
+                        check('Manual run after a green smoke suite', False, f'{started} manual results recorded while the smoke suite is not green')
+            check('Manual regression run recorded', not_run == 0, f'{not_run} cases still "Not run"' if not_run else runs[-1].name)
 
     # Published process doc in sync
     if (root / 'docs/feature-development.md').exists():

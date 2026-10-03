@@ -12,7 +12,7 @@
 | Static analysis | PHPStan, Deptrac, ESLint, `tsc --noEmit` | Deptrac enforces the DDD layers; ESLint's `react/jsx-no-undef` catches blank screens |
 | Code style | PHP-CS-Fixer (`@Symfony`), Prettier (Google style) | Formatting is applied by the tools, never argued about in review (§5) |
 | Security | `composer audit`, `npm audit`, the checklist in `docs/security/` | Run on every feature (§6) |
-| Tests | PHPUnit (unit + functional), Vitest + Testing Library, Playwright | See the testing pyramid in §7.2 |
+| Tests | PHPUnit (unit + functional), Vitest + Testing Library, Playwright (the smoke suite) | See the testing pyramid in §7.2 and the smoke suite in §8 |
 
 Typical services in `docker-compose.yml`: `php`, `nginx`, `database`, `worker`, `node`, `mailpit`, and `e2e`
 behind a profile. The commands used throughout this guide are:
@@ -25,6 +25,6 @@ docker compose exec php composer deptrac           # layer and context dependenc
 docker compose exec node npm run -s lint           # ESLint
 docker compose exec node npm run -s typecheck      # TypeScript
 docker compose exec node npm test                  # Vitest
-docker compose --profile e2e run --rm e2e          # Playwright
+docker compose --profile e2e run --rm e2e          # Playwright: the smoke suite (§8.1; `e2e/smoke.sh` prepares the stack first)
 docker compose logs --tail=30 node                 # did the UI build compile?
 ```

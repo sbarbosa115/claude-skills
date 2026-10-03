@@ -31,7 +31,7 @@ The static analysis gate (§5.4) must already be green. Then run the tests:
 docker compose exec php php bin/phpunit                # all of it; read the final OK line
 docker compose exec node npm test                      # Vitest
 docker compose logs --tail=30 node | grep -iE "error|compiled"
-docker compose --profile e2e run --rm e2e              # when the feature touches a critical flow
+python3 ~/.claude/skills/symfony-react-app/scripts/smoke.py   # the smoke suite (§8.1): green before any manual run
 ```
 
 **The testing pyramid:**
@@ -41,8 +41,8 @@ docker compose --profile e2e run --rm e2e              # when the feature touche
 | Domain rules | PHPUnit | `tests/Unit/<Context>/` | arithmetic, dates, invariants: fast, no HTTP |
 | API endpoints | PHPUnit `WebTestCase` | `tests/Functional/Api/` | each role, tenant isolation, refusals, emails |
 | UI logic | Vitest + Testing Library | next to the file (`X.test.tsx`) | what the user types and sees |
-| Critical flows | Playwright | `e2e/*.spec.ts` | sign-in, money: few on purpose |
-| Whole app, by hand | Browser + regression suite | `docs/tests/ui-regression.md` | every screen, as real users (§8) |
+| Smoke suite | Playwright, against the stack | `e2e/*.spec.ts` | the simple cases of the regression suite: a view opens, a create/edit/remove, an access rule, a form's messages (§8.1) |
+| What needs a person | Browser + regression suite | `docs/tests/ui-regression.md` | the complex cases: what is judged by eye, long stories, real outside services (§8.2) |
 
 **Baselines hold the past, not the present.** A new PHPStan, ESLint or Deptrac finding gets fixed, not added to a
 baseline or suppressed. A deliberate exception goes in the config file with its reason next to it.
@@ -51,6 +51,9 @@ baseline or suppressed. A deliberate exception goes in the config file with its 
 rows is an N+1. Add a test that fails when a list's query count grows with its rows.
 
 ### 7.3 The browser
+
+The browser comes after the scripts: the feature's smoke tests pass on this stack before its screens are opened by
+hand (§8 says how the whole suite is run and recorded).
 
 Open the app **on this worktree's port**, as the role that uses the feature, and for every page, tab and modal it
 adds or changes:

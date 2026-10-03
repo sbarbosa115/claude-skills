@@ -119,7 +119,7 @@ gradually. New code goes into FSD slices. Existing generic components move into 
 | Entity | Vitest for its mappers/formatters (`model/`, `lib/`) | `entities/<x>/api` typed with the generated schema types, `model`, a small `ui` |
 | Feature | Testing Library test: what the user types, clicks and sees, queried by role and label | `features/<action>/ui` (the button, form or modal) + `model` (state, validation) |
 | Widget / page | A render test for loading, empty, error and one row | Compose features and entities; lazy-load the page route |
-| Critical flow | Playwright spec, only for flows that would be a disaster to break (sign-in, money) | — |
+| Regression cases | The feature's simple cases as Playwright smoke tests (`e2e/<area>.spec.ts`, named by case ID, §8.0) | The spec passes on the worktree's stack; the complex cases are written for the manual run |
 
 **UI/UX rules:**
 

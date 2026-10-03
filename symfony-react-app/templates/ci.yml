@@ -64,7 +64,23 @@ jobs:
           $PHP php bin/phpunit
           $NODE npm test --if-present
 
-      # PROJECT: add the Playwright job when the project has one (docker compose --profile e2e run --rm e2e).
+      # The smoke suite (steps/08-regression-run.md §8.1) against the built app. PROJECT: e2e/smoke.sh prepares the
+      # stack (seed, offline stand-ins) and runs Playwright in the e2e container; it needs the whole stack up.
+      - name: Smoke suite
+        run: |
+          if [ -x $APP_DIR/e2e/smoke.sh ]; then
+            $NODE npm run build
+            docker compose up -d --wait
+            $APP_DIR/e2e/smoke.sh
+          fi
+
+      - name: Smoke suite report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: ${{ env.APP_DIR }}/e2e/.results
+          if-no-files-found: ignore
 
       - name: Logs on failure
         if: failure()

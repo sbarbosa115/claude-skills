@@ -44,17 +44,17 @@ branch, the other items start from it.
 The table goes in the PRD (`docs/pdr/prd-<feature>.md`, from `templates/split-plan.md`), under `## Split`:
 
 ```markdown
-| # | Slug | Item | Owns (context / slice, files) | Tests first | Browser cases | Depends on |
-|---|---|---|---|---|---|---|
-| 0 | contract | Schema, ports, DTOs, types | Ordering/Domain, migration, Output DTOs, api.d.ts | OrderLineTest, response shapes | — | — |
-| 1 | orders-api | Owner lists and marks orders | Ordering/Application + UI/Http | OrderListApiTest (owner, other tenant 404) | — | 0 |
-| 2 | orders-ui | Orders tab in the dashboard | widgets/order-list, features/mark-handled | OrderList.test.tsx | ORD-06 – 09 | 0 |
-| 3 | orders-email | Daily digest email | Ordering/Application/EventHandler, emails.* `digest.` | DigestTest | ORD-10 | 1 |
+| # | Slug | Item | Owns (context / slice, files) | Tests first | Browser cases | Depends on | Model |
+|---|---|---|---|---|---|---|---|
+| 0 | contract | Schema, ports, DTOs, types | Ordering/Domain, migration, Output DTOs, api.d.ts | OrderLineTest, response shapes | — | — | — |
+| 1 | orders-api | Owner lists and marks orders | Ordering/Application + UI/Http | OrderListApiTest (owner, other tenant 404) | — | 0 | opus |
+| 2 | orders-ui | Orders tab in the dashboard | widgets/order-list, features/mark-handled | OrderList.test.tsx | ORD-06 – 09 | 0 | sonnet |
+| 3 | orders-email | Daily digest email | Ordering/Application/EventHandler, emails.* `digest.` | DigestTest | ORD-10 | 1 | sonnet |
 ```
 
 `scripts/split.py plan <prd>` checks the table (item 0 first, known dependencies, no cycles, no case ID range used
-twice) and prints the **waves**: the items that can run at the same time. Items 1 and 2 above are wave 1; item 3 is
-wave 2, after item 1 merges.
+twice, a known model) and prints the **waves**: the items that can run at the same time, each with its model.
+Items 1 and 2 above are wave 1; item 3 is wave 2, after item 1 merges.
 
 **How many at once:** each item runs its own Docker stack (§7.1), a few GB of RAM each, so three or four at a time on
 one machine. Browser checks share one browser: items verify their screens one at a time.
@@ -63,14 +63,30 @@ one machine. Browser checks share one browser: items verify their screens one at
 
 `scripts/split.py start <prd> [slug… | --wave=N]` creates, for each item, the branch `feature/<feature>-<slug>` from
 the base branch, its worktree `../<repo>-<feature>-<slug>`, and a gitignored `.env` with free host ports; it records
-the base branch in git config (read by `dod.py --item`) and prints the item's brief. `split.py status <prd>` shows,
+the base branch in git config (read by `dod.py --item`) and prints the item's model. `split.py status <prd>` shows,
 per item, its worktree, commits and whether it is merged.
+
+**A model per item.** An agent launched without a model runs on the coordinator's, and a wave of them on the top
+model spends the session's budget in minutes. The `Model` column says what each item runs on. The planner (§2, the
+most advanced model) fills it for every item, by what the item builds, not by its size:
+
+| Model | The item is | Examples |
+|---|---|---|
+| `haiku` | Mechanical: no rule to decide, the result is checked by the gate alone | Copy and i18n keys, README and help rows, a rename, CSS for a screen that exists |
+| `sonnet` | Well specified, and the same shape as a feature that exists | A CRUD endpoint on an aggregate from item 0, a list or form screen built from the shared UI, an email, a command |
+| `opus` | New rules or more than one moving part | New domain invariants, a voter or tenant boundary, money, a state machine, the queue and retries, an external API, a screen with real client state |
+| `fable` | So hard a wrong turn costs more than the model | Rarely an item: if it needs this, ask whether it belongs in item 0 or to the coordinator |
+
+Item 0 and the merges stay with the coordinator, on the session's model. When an item fits two rows, take the
+cheaper one and write its risk in the PRD's "Decisions": an agent that fails the gate twice on the same problem, or
+reports that it is stuck, is relaunched one model up on the same worktree (its commits stay). Do not start a whole
+wave a model up "to be safe", and do not launch an agent on a model the table does not give it.
 
 Two ways to run the items; pick one per feature:
 
 | | Subagents (one coordinating session) | One session per item |
 |---|---|---|
-| How | The coordinator launches one agent per item with `split.py prompt <prd> <slug>` as its prompt, all of a wave at once | Open a Claude session in each item's worktree and paste its brief |
+| How | The coordinator launches one agent per item with `split.py prompt <prd> <slug>` as its prompt and the item's model as the agent's `model`, all of a wave at once | Open a Claude session in each item's worktree on the item's model (`claude --model <model>`) and paste its brief |
 | Good for | Items that are well specified and mostly backend or logic | Items with UI judgement, or that need the user's decisions while built |
 | Watch | Agents do not share what they learn; the coordinator reads each report before merging. An agent's shell may start in the main checkout: every command `cd`s into the item's worktree | The user relays questions; the coordinator still does the merges |
 
@@ -80,7 +96,8 @@ own branch (the permission system refuses `git merge` to agents), so an item is 
 cut from, and the coordinator resolves any overlap while merging, on the base branch.
 
 Either way, **each item goes through §4–§5 and §7 on its own stack**: test-first, the gate, its own screens in the
-browser, and `dod.py --item`. It adds its regression cases (in its ID range) but does not record a run, and it does not
+browser, and `dod.py --item`. It adds its regression cases (in its ID range), the simple ones as smoke tests in a
+spec file of its own that passes on its stack, but does not record a run, and it does not
 run the security audit: those happen once, on the merged base branch.
 
 ### 2b.5 Merging

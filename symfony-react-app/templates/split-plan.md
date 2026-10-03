@@ -26,13 +26,15 @@ every endpoint (and their JSON), the i18n prefixes, CSS files and regression-sui
 <!--
     One row per item. Slug: lowercase letters, digits and dashes; it names the branch (feature/<feature>-<slug>) and
     the worktree. "Depends on": the # of the items that must be merged first (comma-separated), or —. "Browser cases":
-    the ID range the item adds to docs/tests/ui-regression.md (e.g. ORD-06 – 09), or —.
+    the ID range the item adds to docs/tests/ui-regression.md (e.g. ORD-06 – 09), or —. "Model": the model the
+    item's agent runs on (haiku, sonnet, opus or fable), set by the planner for every item by what the item builds
+    (steps/02-plan.md, steps/02b-split.md §2b.4). Item 0 is built by the coordinator and has none.
 -->
 
-| # | Slug | Item | Owns (context / slice, files) | Tests first | Browser cases | Depends on |
-|---|---|---|---|---|---|---|
-| 0 | contract | Schema, ports, DTOs, types | … | … | — | — |
-| 1 | … | … | … | … | … | 0 |
+| # | Slug | Item | Owns (context / slice, files) | Tests first | Browser cases | Depends on | Model |
+|---|---|---|---|---|---|---|---|
+| 0 | contract | Schema, ports, DTOs, types | … | … | — | — | — |
+| 1 | … | … | … | … | … | 0 | sonnet |
 
 ## Decisions
 

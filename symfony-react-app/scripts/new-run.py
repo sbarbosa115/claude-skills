@@ -6,10 +6,12 @@ Run from anywhere inside the project's git checkout:
     python3 ~/.claude/skills/symfony-react-app/scripts/new-run.py            # docs/tests/runs/<date>-<feature>.md
     python3 ~/.claude/skills/symfony-react-app/scripts/new-run.py --name=release-2.3
 
-It reads every case ID from docs/tests/ui-regression.md (lines like `**AREA-01 · What the user does**`) and lists
-each one as "Not run". Fill in the results while running. With no suite yet it writes the skeleton from
-templates/ui-regression.md and names the run "baseline": write the cases for what exists first, then run it.
-An existing run file is never overwritten.
+It reads every case from docs/tests/ui-regression.md (lines like `**AREA-01 · What the user does**`). A case whose
+next line starts with "Smoke:" is run by the smoke suite (smoke.py) and is not listed; one marked "Smoke (part):"
+is listed with what is left to do by hand; every other case is listed as "Not run". The file has two parts, in the
+order they are done: the smoke suite's attempts (smoke.py adds a row per run), then the manual run in the browser.
+With no suite yet it writes the skeleton from templates/ui-regression.md and names the run "baseline": write the
+cases for what exists first, then run it. An existing run file is never overwritten.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ import sys
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
-CASE = re.compile(r'^\*\*([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-\d+)\s*·\s*(.+?)\*\*', re.M)
+CASE = re.compile(r'^\*\*([A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-\d+)\s*·\s*(.+?)\*\*[^\n]*\n(?:(Smoke(?: \(part\))?):\s*([^\n]*(?:\n(?![\n*#])[^\n]*)*))?', re.M)
 
 
 def git(*args: str) -> str:
@@ -44,7 +46,19 @@ def main() -> int:
         name = name or 'baseline'
     name = name or branch.removeprefix('feature/').replace('/', '-')
 
-    cases = CASE.findall(suite.read_text())
+    found = CASE.findall(suite.read_text())
+    automated = [cid for cid, _, smoke, _ in found if smoke == 'Smoke']
+    cases = []
+    for cid, title, smoke, note in found:
+        if smoke == 'Smoke':
+            continue
+        if smoke:
+            # The marker ends at its first full stop at the end of a line (the case's own text follows it). What
+            # is left for a person is what it says after "by hand:".
+            note = re.split(r'\.[ \t]*(?:\n|$)', note, maxsplit=1)[0]
+            by_hand = re.search(r'by hand:\s*(.+)', ' '.join(note.split()), re.I)
+            title += ' — by hand: ' + (by_hand.group(1).rstrip('.') if by_hand else 'see the case')
+        cases.append((cid, title.replace('|', '/')))
     run = tests / 'runs' / f'{dt.date.today():%Y-%m-%d}-{name}.md'
     if run.exists():
         print(f'{run.relative_to(root)} exists: not overwritten.')
@@ -56,17 +70,33 @@ def main() -> int:
 - **Suite:** [`../ui-regression.md`](../ui-regression.md), at `{commit}`{", first version (the baseline)" if baseline else ""}.
 - **Branch:** `{branch}` at `{commit}`, on this checkout's stack (app <!-- URL -->).
 - **Data:** <!-- reset to the seed before the run / not reset (why) -->
-- **How:** browser driven through the real UI; emails read in the mail catcher; database/logs where a screen could not prove it.
+- **How:** the smoke suite first (Playwright against this stack), until it is green; then the cases left for a person, in a browser driven through the real UI; emails read in the mail catcher; database/logs where a screen could not prove it.
 
 ## Summary
 
 | | Cases |
 |---|---|
-| Cases in the suite | {len(cases)} |
-| Pass | <!-- N (M after a fix made during the run) --> |
-| Fail | <!-- N: IDs --> |
+| Cases in the suite | {len(found)} |
+| Run by the smoke suite | {len(automated)} |
+| Left for the manual run | {len(cases)} |
+| Manual: pass | <!-- N (M after a fix made during the run) --> |
+| Manual: fail | <!-- N: IDs --> |
 
-## Results
+## Smoke suite
+
+`python3 ~/.claude/skills/symfony-react-app/scripts/smoke.py` runs it and adds a row here. A run that is not green
+is recorded too: write what failed under "Smoke findings", fix it, and run again. The manual run starts only when
+the last row is green.
+
+| # | When | Commit | Result | Failed |
+|---|---|---|---|---|
+<!-- smoke.py adds a row per run of the whole suite -->
+
+### Smoke findings
+
+<!-- Numbered: the failing test (its case ID), whether the app or the test was wrong, the cause, and the fix (commit). -->
+
+## Manual run
 
 Replace "Not run" with Pass, Fail, "Pass after fix" (with the commit) or Blocked (with why). Group consecutive
 passes into ranges (`AREA-01 – 05`) once done.
@@ -83,7 +113,7 @@ passes into ranges (`AREA-01 – 05`) once done.
 
 <!-- Anything about the environment that could have affected the result. -->
 ''')
-    print(f'Created {run.relative_to(root)} with {len(cases)} cases to run.')
+    print(f'Created {run.relative_to(root)}: {len(automated)} cases run by the smoke suite, {len(cases)} to run by hand.')
     return 0
 
 

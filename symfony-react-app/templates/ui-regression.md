@@ -1,15 +1,20 @@
 # UI regression suite
 
-The manual pass to run through the browser after the automated suites are green and before a release. Each case
-is something a real user does, written as steps and what must happen. Run them **in order**: later cases use the
-data earlier ones create.
+What a real user does with the app, case by case, written as steps and what must happen. It is run in two parts:
+the **smoke suite** (Playwright, `e2e/`) runs the simple cases against the Docker stack, and when it is green a
+person runs the rest in a browser, **in order**: later cases use the data earlier ones create.
+
+A case with `Smoke:` under its title is run by the script named there and skipped by the manual run; with
+`Smoke (part):` the script covers what the line says and the rest ("by hand: …") is run manually; with neither, the
+whole case is manual.
 
 Every new feature adds its cases here, in the section of the screen it lives on, in the same format. A case is
 only worth adding if it would catch the feature breaking: name the button, the data and what you should see.
 Case IDs are stable: a new case takes the next number in its section, and a removed case leaves a gap.
 
-Each run is recorded as a new file in [`runs/`](runs/) with the result of every ID
-(`python3 ~/.claude/skills/symfony-react-app/scripts/new-run.py` creates it).
+Each run is recorded as a new file in [`runs/`](runs/): the smoke suite's attempts and the result of every manual
+case (`python3 ~/.claude/skills/symfony-react-app/scripts/new-run.py` creates it, `smoke.py` runs the smoke suite
+and records it).
 
 ## Before you start
 
@@ -45,6 +50,7 @@ docker compose exec php php bin/console <the project's seed or fixtures command>
 ## 1. Public pages (no login)
 
 **PUB-01 · The home page loads**
+Smoke: `e2e/public.spec.ts`.
 Open `/`. **Expected:** the page renders, with no console errors.
 
 ## 2. Authentication

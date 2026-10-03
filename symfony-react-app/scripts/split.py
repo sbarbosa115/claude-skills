@@ -3,7 +3,7 @@
 
 Run from anywhere inside the project's git checkout:
 
-    split.py plan   docs/pdr/prd-<feature>.md                 # check the table, print the waves
+    split.py plan   docs/pdr/prd-<feature>.md                 # check the table, print the waves and each item's model
     split.py start  docs/pdr/prd-<feature>.md <slug>…         # branch + worktree + .env ports for these items
     split.py start  docs/pdr/prd-<feature>.md --wave=1        # … for every item of a wave
     split.py status docs/pdr/prd-<feature>.md [--check]       # per item: worktree, commits, merged? (--check: exit 1
@@ -13,6 +13,10 @@ Run from anywhere inside the project's git checkout:
 The feature is the PRD's file name without "prd-" (or --feature=<name>); its base branch is feature/<feature>, and
 item <slug> is built on feature/<feature>-<slug> in ../<repo>-<feature>-<slug>. Item 0 is built on the base branch
 itself. `start` refuses an item whose dependencies are not merged into the base branch (--force to override).
+
+The table's "Model" column (haiku, sonnet, opus or fable) is the model the item's agent runs on, set by the planner
+for every item but item 0. `plan` and `start` print it: the coordinator passes it when it launches the agent. A plan
+written before the column existed runs its items on sonnet.
 """
 
 from __future__ import annotations
@@ -28,6 +32,8 @@ SLUG = re.compile(r'^[a-z0-9][a-z0-9-]*$')
 CASES = re.compile(r'([A-Z][A-Z0-9]*)-(\d+)(?:\s*[–-]\s*(?:[A-Z][A-Z0-9]*-)?(\d+))?')
 COMPOSE_PORT = re.compile(r'\$\{(\w+):-(\d+)\}:\d+')
 PORT_OFFSET, PORT_STEP = 10000, 100
+MODELS = ('haiku', 'sonnet', 'opus', 'fable')
+DEFAULT_MODEL = 'sonnet'
 
 
 @dataclass
@@ -40,6 +46,7 @@ class Item:
     cases: str = ''
     depends: list[str] = field(default_factory=list)
     row: str = ''
+    model: str = DEFAULT_MODEL
 
 
 class SplitError(Exception):
@@ -92,13 +99,15 @@ def parse(prd: Path) -> list[Item]:
 
     ci, cs, ct = col('#'), col('slug'), col('item')
     co, cte, cb, cd = col('owns'), col('tests'), col('browser'), col('depends')
+    cm = next((i for i, h in enumerate(header) if h.startswith('model')), None)  # optional: older plans have none
     items = []
     for line in table[2:]:
         c = cells(line)
         if len(c) < len(header):
             raise SplitError(f'{prd}: row has {len(c)} cells, the header {len(header)}: {line}')
         deps = [] if blank(c[cd]) else [d.strip() for d in re.split(r'[,\s]+', c[cd]) if d.strip()]
-        items.append(Item(c[ci], c[cs], c[ct], c[co], c[cte], c[cb], deps, line))
+        model = DEFAULT_MODEL if cm is None else '' if blank(c[cm]) else c[cm].strip('`* ').lower()
+        items.append(Item(c[ci], c[cs], c[ct], c[co], c[cte], c[cb], deps, line, model))
     return items
 
 
@@ -113,6 +122,10 @@ def validate(items: list[Item]) -> list[str]:
     for i in items:
         if not SLUG.match(i.slug):
             errors.append(f'item {i.id}: slug "{i.slug}" must be lowercase letters, digits and dashes')
+        if i.id != '0' and not i.model:
+            errors.append(f'item {i.id} has no model: the planner sets one per item ({", ".join(MODELS)})')
+        elif i.id != '0' and i.model not in MODELS:
+            errors.append(f'item {i.id}: model "{i.model}" must be one of {", ".join(MODELS)}')
         for d in i.depends:
             if d not in ids:
                 errors.append(f'item {i.id} depends on unknown item {d}')
@@ -296,7 +309,8 @@ def cmd_plan(argv: list[str]) -> int:
         print(label)
         for i in members:
             deps = f'  after {", ".join(i.depends)}' if i.depends else ''
-            print(f'  {i.id:>3}  {i.slug:<20} {i.title}{deps}')
+            model = 'coordinator' if i.id == '0' else i.model
+            print(f'  {i.id:>3}  {i.slug:<20} {model:<12} {i.title}{deps}')
         print()
     widest = max(sum(1 for i in items if wave[i.id] == w) for w in range(1, max(wave.values()) + 1)) if len(items) > 1 else 0
     if widest > 4:
@@ -351,10 +365,11 @@ def cmd_start(argv: list[str]) -> int:
             if subprocess.run(['git', 'check-ignore', '-q', '.env'], cwd=path).returncode:
                 print(f'WARN  {path}/.env is not gitignored: do not commit it')
         started += 1
-        print(f'START {item.slug}: {branch} in {path}' + (f'  ({", ".join(f"{k}={v}" for k, v in ports.items())})' if ports else ''))
+        print(f'START {item.slug}: {branch} in {path}, model {item.model}' + (f'  ({", ".join(f"{k}={v}" for k, v in ports.items())})' if ports else ''))
     if started:
         print('\nNext, for each item: bring up its stack (steps/07-verify.md §7.1), then hand it its brief:')
         print(f'  python3 {Path(__file__).resolve()} prompt {rel_prd} <slug>')
+        print('Launch each agent (or open each session) on the model printed above, not on the coordinator\'s.')
     return 0
 
 
