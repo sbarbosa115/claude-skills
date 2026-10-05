@@ -168,7 +168,10 @@ def main() -> int:
 
         # Regression run
         runs = sorted((root / 'docs/tests/runs').glob(f'*-{feature}.md')) + sorted((root / 'docs/tests/runs').glob('*-baseline.md'))
-        runs = [r for r in runs if r.name[:10] >= git('log', '-1', '--format=%cs', merge_base)]
+        # A baseline run counts only when it is newer than the branch's base; the feature's own run always counts
+        # (merging main later moves the base past the day the run file was named).
+        base_day = git('log', '-1', '--format=%cs', merge_base)
+        runs = [r for r in runs if not r.name.endswith('-baseline.md') or r.name[:10] >= base_day]
         if not runs:
             check('Regression run recorded', False, f'no docs/tests/runs/*-{feature}.md: run new-run.py')
         else:
