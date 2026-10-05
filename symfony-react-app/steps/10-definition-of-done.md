@@ -28,6 +28,8 @@ the report.
 - [ ] The smoke suite run against the worktree's stack (`smoke.py`), every attempt recorded, what failed fixed, and
       the last attempt green (nothing failed, nothing skipped) on the code as it is.
 - [ ] Only then the manual run of the cases left for a person, recorded in the same file of `docs/tests/runs/`.
-- [ ] README (API row, decisions, known gaps) and help updated, and a PR opened from the feature base branch.
+- [ ] README (API row, decisions, known gaps) and help updated.
+
+When every box is ticked: the pull request (§11.1), and after the user merges it, the teardown (§11.2).
 
 Report what was *not* done as plainly as what was.

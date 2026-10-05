@@ -10,9 +10,5 @@
 - **CI runs the same gate.** If the project has no workflow, install `templates/ci.yml` as
   `.github/workflows/ci.yml` (it runs the style checks, the analysers, the test suites and the smoke suite in the
   project's Docker stack). A check that only runs locally will stop being run.
-- **Pull request** from `feature/<name>` to `main`/`master`: link the plan, summarise what changed per layer,
-  link the regression run file (the smoke suite's attempts and the manual run) and the security audit file, and list what was not done.
-- After the merge: `docker compose down` in the worktree (add `--volumes` to drop its data) and
-  `git worktree remove ../<repo>-<name>`. For a split feature, do the same for every item's worktree
-  (`split.py status` lists them), and delete the item branches only now, after the base branch is merged into
-  `main`.
+- **Then** the definition of done (§10), and only once it passes, the pull request and, after the merge, the
+  teardown (§11).

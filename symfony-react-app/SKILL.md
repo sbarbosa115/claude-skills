@@ -1,6 +1,6 @@
 ---
 name: symfony-react-app
-description: Build a feature (or a whole app from a PRD) in a Symfony + React application running in Docker — plan, branch into a worktree, build test-first (DDD/hexagonal backend, Feature-Sliced Design frontend), static-analysis gate, security audit, a Playwright smoke suite that must be green before the manual browser run of the complex cases, definition of done and PR. Use when asked to develop, build or implement a feature, PRD or spec in a Symfony + React project, including splitting a big requirement into items built in parallel (worktrees, subagents or separate sessions) and merging them back.
+description: Build a feature (or a whole app from a PRD) in a Symfony + React application running in Docker — plan, branch into a worktree, build test-first (DDD/hexagonal backend, Feature-Sliced Design frontend), static-analysis gate, security audit, a Playwright smoke suite that must be green before the manual browser run of the complex cases, definition of done, then the PR (or the link to open it) and, once merged, the teardown of the feature's Docker stacks. Use when asked to develop, build or implement a feature, PRD or spec in a Symfony + React project, including splitting a big requirement into items built in parallel (worktrees, subagents or separate sessions) and merging them back.
 ---
 
 # Symfony + React app: feature process
@@ -20,8 +20,10 @@ project's own `README.md`, `CLAUDE.md` and `.claude/skills/` override them where
 | 6. Security audit | `steps/06-security.md` | `scripts/audit.py`, `templates/security-README.md` |
 | 7. Verify on the local Docker stack | `steps/07-verify.md` | |
 | 8. Regression run: the smoke suite (Playwright), then the manual browser run | `steps/08-regression-run.md` | `scripts/new-run.py`, `scripts/smoke.py`, `templates/ui-regression.md`, `templates/e2e/` |
-| 9. Finish (docs, CI, PR) | `steps/09-finish.md` | `templates/ci.yml`, `scripts/build-doc.py` |
-| Definition of done | `steps/10-definition-of-done.md` | `scripts/dod.py [--quick] [--item]` |
+| 9. Finish (docs, CI) | `steps/09-finish.md` | `templates/ci.yml`, `scripts/build-doc.py` |
+| 10. Definition of done | `steps/10-definition-of-done.md` | `scripts/dod.py [--quick] [--item]` |
+| 11. Pull request, the timeline into the PRD, then teardown after the merge | `steps/11-pr-and-teardown.md` | `scripts/pr.py`, `scripts/timeline.py report`, `scripts/teardown.py [--yes] [--force]` |
+| Every step: time it as it starts | `steps/00-overview.md` | `scripts/timeline.py start <step>\|pause\|resume\|end\|show` |
 
 Scripts live in `~/.claude/skills/symfony-react-app/scripts/` and run from anywhere inside the project checkout.
 Settings via env: `PHP_SERVICE` (php), `NODE_SERVICE` (node), `APP_DIR` (backend).

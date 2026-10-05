@@ -1,5 +1,7 @@
 ## 2. Plan the feature before writing code
 
+Start the timeline first: `timeline.py start plan --feature=<name>` (§0, "Time every step").
+
 A plan is short and written down. Put it in the PR description, or in `docs/pdr/prd-<feature>.md` when the feature
 is big enough to need a product document.
 

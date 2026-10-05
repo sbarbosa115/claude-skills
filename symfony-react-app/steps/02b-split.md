@@ -14,7 +14,8 @@ feature/<name> (the base branch, from fresh origin/main)
   │    └─ merged back into the base branch, cheap checks only (migrations, container, typecheck)
   └─ barrier: wait until every item is merged
        → main merged in once → gate → full PHPUnit + Vitest → security audit → verify
-       → regression run → finish (one PR) → definition of done
+       → regression run → finish → definition of done → one PR (§11)
+       → after the user merges it: every stack of the feature torn down (§11.2)
 ```
 
 ### 2b.1 Contract first: item 0
@@ -140,9 +141,9 @@ No gate, no PHPUnit, no Vitest between merges: they run once, at the barrier. A 
 on the base branch right away, before the next merge. When a wave is merged, the next wave starts from the updated
 base branch (`split.py start --wave=N`).
 
-**Stop each merged item's stack** (`docker compose down` in its worktree) as soon as it is merged, and remove its
-worktree; **keep the item branches** until the base branch is merged into `main`: `split.py status` knows an item is
-merged by its branch.
+**Stop each merged item's stack** (`docker compose stop` in its worktree) as soon as it is merged; **keep its
+worktree and branch** until the base branch is merged into `main`: `split.py status` knows an item is merged by its
+branch, and `teardown.py` removes them all then (§11.2).
 
 **The base branch stays frozen while items are built:** do not merge `main` into it between merges, so every item of a
 wave is cut from, and merged into, the same code. `main` comes in once, at the barrier. If an item truly needs
@@ -152,6 +153,10 @@ Clearing the Symfony cache while the stack's worker runs kills the worker the ne
 email is then stuck until Messenger's redelivery timeout): restart the worker after `cache:clear`.
 
 ### 2b.6 The barrier, then the base branch as one feature
+
+The coordinator's timeline marks the split's phases (`timeline.py start contract`, `build` when the first wave
+starts, `merge`, `barrier` while it waits on items, then the steps below); each item's own time comes from git in
+the report (its branch's creation to its merge), so item agents record nothing.
 
 The base branch waits here until **every** item of the split is merged: `split.py status <prd> --check` exits 0
 (it prints the items still open otherwise, and `dod.py` fails while one is). Nothing below starts before that.
@@ -166,8 +171,11 @@ Then, on the base branch's worktree and its own stack, in this order:
    again.
 5. **Verify** (§7): every item's screens opened in the browser on this stack.
 6. **Regression run** (§8): the whole smoke suite until green, then the manual run.
-7. **Finish** (§9) and one pull request from the base branch.
+7. **Finish** (§9): docs and CI.
 8. **Definition of done:** `dod.py` (without `--item`).
+9. **One pull request** from the base branch (§11.1): `pr.py` opens it, or prints the link to open it by hand.
+10. **After the user merges it:** `teardown.py` takes down the base branch's and every item's stack and worktree
+    (§11.2).
 
 **Fixes go on the base branch.** Item worktrees are stale by now and are not reopened: the coordinator fixes what the
 suites, the audit or the runs find on the base branch, or launches an agent in the base branch's worktree.

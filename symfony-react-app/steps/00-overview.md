@@ -30,4 +30,23 @@ The whole process, in order:
    smoke tests. Run the smoke suite against the stack; record, fix and re-run until it is green; only then run the
    cases left for a person in the browser. Both parts are recorded in `docs/tests/runs/`. If there is no suite yet,
    the first feature sets up the baseline.
-9. **Finish:** docs, the definition-of-done checklist and the pull request.
+9. **Finish:** docs and CI.
+10. **Definition of done:** the checklist, with `dod.py`.
+11. **Pull request, then teardown:** open the pull request, or give the user the link to open it by hand, and
+    write the feature's timeline into its PRD; once the user has merged it, tear down every Docker stack and
+    worktree the feature used.
+
+**Time every step as it starts.** The session cannot remember when a step began, so it records it then:
+
+```bash
+python3 ~/.claude/skills/symfony-react-app/scripts/timeline.py start <step>   # plan, split, branch, contract, build,
+                                                                              # merge, barrier, gate, tests, audit,
+                                                                              # verify, regression, finish, dod, pr
+python3 ~/.claude/skills/symfony-react-app/scripts/timeline.py pause          # the user stops the work, or it waits on them
+python3 ~/.claude/skills/symfony-react-app/scripts/timeline.py resume
+```
+
+Starting a step ends the one before; a step started again (the gate after a fix) adds to its time. The log lives in
+the repository's git directory, so every worktree and a later session add to the same one. On `main`, before the
+branch exists, add `--feature=<name>`. A step whose start was missed is recorded late with `--at="YYYY-MM-DD HH:MM"`
+(from the commit or file times), never guessed: if nothing shows when it began, leave it out and say so.
