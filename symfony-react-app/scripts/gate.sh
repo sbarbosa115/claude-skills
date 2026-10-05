@@ -7,6 +7,9 @@
 #
 # Checks: cs (PHP-CS-Fixer), phpstan, deptrac, prettier, eslint, tsc, and every executable in the project's
 # .claude/gate.d/ (a project's own checks: each is run from the repo root and named after its file).
+# The PHP checks (cs, phpstan, deptrac) and the JS checks (prettier, eslint, tsc) run as two groups at the same time,
+# each group in order; the project's own checks run after both. Prettier and ESLint keep a cache in node_modules/.cache
+# (PHP-CS-Fixer and PHPStan keep theirs already), so a second run on unchanged code is quicker.
 # A tool the project does not have yet is MISSING, and MISSING fails the gate like FAIL does: install it and
 # create its config (steps/05, §5.2), or --skip it knowingly. Exit 0 only when every check that ran passed.
 #
@@ -55,32 +58,47 @@ fi
 
 declare -a NAMES RESULTS
 failed=0
-record() { NAMES+=("$1"); RESULTS+=("$2"); [ "$2" = PASS ] || [ "$2" = SKIPPED ] || failed=1; }
 
-# run <name> <available?> <command…>: the command's output goes to $LOGS/<name>.log
+# run <name> <available?> <command…>: the command's output goes to $LOGS/<name>.log, its result to $LOGS/<name>.result
+# (the groups run in subshells, so results travel through files); a line is printed when it ends.
 run() {
-    local name=$1 available=$2; shift 2
-    if [[ $SKIP == *,$name,* ]]; then record "$name" SKIPPED; return; fi
-    if ! eval "$available"; then record "$name" MISSING; return; fi
-    printf '  %-9s … ' "$name"
-    if "$@" >"$LOGS/$name.log" 2>&1; then echo ok; record "$name" PASS; else echo FAIL; record "$name" FAIL; fi
+    local name=$1 available=$2 result; shift 2
+    if [[ $SKIP == *,$name,* ]]; then echo SKIPPED >"$LOGS/$name.result"; return; fi
+    if ! eval "$available"; then echo MISSING >"$LOGS/$name.result"; return; fi
+    if "$@" >"$LOGS/$name.log" 2>&1; then result=PASS; else result=FAIL; fi
+    echo "$result" >"$LOGS/$name.result"
+    printf '  %-9s … %s\n' "$name" "$([ "$result" = PASS ] && echo ok || echo FAIL)"
 }
 
 echo "Checking…"
-run cs       has_cs                                         php vendor/bin/php-cs-fixer fix --dry-run --diff --show-progress=none
-run phpstan  '[ -x "$APP/vendor/bin/phpstan" ]'             php vendor/bin/phpstan analyse --no-progress --memory-limit=1G
-if grep -q '"deptrac"' "$APP/composer.json" 2>/dev/null; then
-    run deptrac true                                        php composer -q deptrac
-else
-    run deptrac '[ -x "$APP/vendor/bin/deptrac" ]'          php vendor/bin/deptrac analyse --no-progress
-fi
-run prettier has_prettier                                   node npx prettier --check --log-level warn .
-if npm_script lint; then run eslint has_eslint              node npm run -s lint
-else run eslint has_eslint                                  node npx eslint .; fi
-if npm_script typecheck; then run tsc true                  node npm run -s typecheck
-else run tsc '[ -e "$APP/tsconfig.json" ]'                  node npx tsc --noEmit; fi
+CHECKS=(cs phpstan deptrac prettier eslint tsc)
+(
+    run cs       has_cs                                     php vendor/bin/php-cs-fixer fix --dry-run --diff --show-progress=none
+    run phpstan  '[ -x "$APP/vendor/bin/phpstan" ]'         php vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+    if grep -q '"deptrac"' "$APP/composer.json" 2>/dev/null; then
+        run deptrac true                                    php composer -q deptrac
+    else
+        run deptrac '[ -x "$APP/vendor/bin/deptrac" ]'      php vendor/bin/deptrac analyse --no-progress
+    fi
+) &
+(
+    run prettier has_prettier                               node npx prettier --check --cache --log-level warn .
+    if npm_script lint; then run eslint has_eslint          node npm run -s lint
+    else run eslint has_eslint                              node npx eslint . --cache --cache-location node_modules/.cache/eslint/; fi
+    if npm_script typecheck; then run tsc true              node npm run -s typecheck
+    else run tsc '[ -e "$APP/tsconfig.json" ]'              node npx tsc --noEmit; fi
+) &
+wait
 for extra in "$ROOT"/.claude/gate.d/*; do
-    [ -x "$extra" ] && [ -f "$extra" ] && run "$(basename "$extra")" true "$extra"
+    if [ -x "$extra" ] && [ -f "$extra" ]; then
+        CHECKS+=("$(basename "$extra")")
+        run "$(basename "$extra")" true "$extra"
+    fi
+done
+for name in "${CHECKS[@]}"; do
+    NAMES+=("$name")
+    RESULTS+=("$(cat "$LOGS/$name.result" 2>/dev/null || echo FAIL)")
+    case ${RESULTS[-1]} in PASS|SKIPPED) ;; *) failed=1 ;; esac
 done
 
 echo

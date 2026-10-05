@@ -5,6 +5,18 @@ context or more than one new screen**, and the parts can be named so that no two
 or the same screen. A split costs a merge per item and a coordinator's time: for a feature one person would build in
 a day or two, it is slower than building it in one go.
 
+The flow of a split:
+
+```
+feature/<name> (the base branch, from fresh origin/main)
+  ├─ item 0, the contract, built on it alone
+  ├─ feature/<name>-<slug> per item, in parallel: test-first, its own tests, the gate
+  │    └─ merged back into the base branch, cheap checks only (migrations, container, typecheck)
+  └─ barrier: wait until every item is merged
+       → main merged in once → gate → full PHPUnit + Vitest → security audit → verify
+       → regression run → finish (one PR) → definition of done
+```
+
 ### 2b.1 Contract first: item 0
 
 Parallel branches of this stack collide in a few places, always the same ones: the database schema, the API contract
@@ -90,35 +102,76 @@ Two ways to run the items; pick one per feature:
 | Good for | Items that are well specified and mostly backend or logic | Items with UI judgement, or that need the user's decisions while built |
 | Watch | Agents do not share what they learn; the coordinator reads each report before merging. An agent's shell may start in the main checkout: every command `cd`s into the item's worktree | The user relays questions; the coordinator still does the merges |
 
-**What the coordinator does for every item:** it reads the report, opens the item's screens in the browser on the item's
-stack (agents share one browser, so they do not use it), and merges. Items cannot merge the base branch into their
-own branch (the permission system refuses `git merge` to agents), so an item is checked against the base commit it was
-cut from, and the coordinator resolves any overlap while merging, on the base branch.
+**What the coordinator does for every item:** it reads the report and merges. Items cannot merge the base branch
+into their own branch (the permission system refuses `git merge` to agents), so an item is checked against the base
+commit it was cut from, and the coordinator resolves any overlap while merging, on the base branch.
 
-Either way, **each item goes through §4–§5 and §7 on its own stack**: test-first, the gate, its own screens in the
-browser, and `dod.py --item`. It adds its regression cases (in its ID range), the simple ones as smoke tests in a
-spec file of its own that passes on its stack, but does not record a run, and it does not
-run the security audit: those happen once, on the merged base branch.
+**An item's "done" is short on purpose.** The whole suites, the browser and the regression run are what make an
+item wait, and they prove little before the items meet, so they run **once, on the base branch, after every item is
+merged** (§2b.6). Either way of running it, an item:
+
+- builds test-first (§4) and runs **its own tests** (its test files: `bin/phpunit tests/Functional/Api/<X>Test.php`
+  or `--filter`, `npx vitest run <its files>`), never the whole PHPUnit or Vitest suite, the smoke suite or `dod.py`;
+- passes `gate.sh` (§5): lint and type errors are cheap to fix in the item and costly to untangle after many merges;
+- writes its regression cases into the suite (in its ID range), the simple ones as smoke tests in a spec file of its
+  own, which it does not run;
+- passes `dod.py --item`: the branch, the gate, its migration and the regenerated types (it leaves the suites to the
+  base branch);
+- does not open its screens in the browser, record a run or run the security audit.
+
+It reports back, and is ready to merge.
 
 ### 2b.5 Merging
 
-The coordinator merges each finished item into the base branch (never into `main`), in dependency order:
+The coordinator merges each finished item into the base branch (never into `main`), in dependency order, and after
+each merge runs only the **cheap checks** that say the merge itself is sound, so a broken merge is caught while it is
+still clear which item broke it:
 
 ```bash
 cd ../<repo>-<feature>                           # the base branch's worktree
 git merge --no-ff feature/<feature>-<slug>
 # conflicts in openapi.json / api.d.ts: regenerate, never edit
 docker compose exec php php bin/console doctrine:migrations:migrate -n          # and --env=test
-~/.claude/skills/symfony-react-app/scripts/gate.sh && docker compose exec php php bin/phpunit && docker compose exec node npm test
+docker compose exec php php bin/console cache:warmup                            # the container still builds
+docker compose exec node npm run -s typecheck                                   # the merged UI still type-checks
 ```
 
-A merge that breaks the base branch is fixed on the base branch right away, before the next merge. When a wave is
-merged, the next wave starts from the updated base branch (`split.py start --wave=N`).
+No gate, no PHPUnit, no Vitest between merges: they run once, at the barrier. A merge whose cheap checks fail is fixed
+on the base branch right away, before the next merge. When a wave is merged, the next wave starts from the updated
+base branch (`split.py start --wave=N`).
+
+**Stop each merged item's stack** (`docker compose down` in its worktree) as soon as it is merged, and remove its
+worktree; **keep the item branches** until the base branch is merged into `main`: `split.py status` knows an item is
+merged by its branch.
+
+**The base branch stays frozen while items are built:** do not merge `main` into it between merges, so every item of a
+wave is cut from, and merged into, the same code. `main` comes in once, at the barrier. If an item truly needs
+something that just landed on `main`, merge it between waves, never in the middle of one.
 
 Clearing the Symfony cache while the stack's worker runs kills the worker the next time it loads a service (a queued
 email is then stuck until Messenger's redelivery timeout): restart the worker after `cache:clear`.
 
-When every item is merged, the base branch goes through the rest of the process **once**, as one feature: §6 security
-audit, §7 verify, §8 the whole regression run, §9 finish and one pull request. `dod.py` (without `--item`) fails
-while an item of the split is not merged. Remove each merged item's stack and worktree as you go, but **keep the item
-branches** until the base branch is merged into `main`: `split.py status` knows an item is merged by its branch.
+### 2b.6 The barrier, then the base branch as one feature
+
+The base branch waits here until **every** item of the split is merged: `split.py status <prd> --check` exits 0
+(it prints the items still open otherwise, and `dod.py` fails while one is). Nothing below starts before that.
+
+Then, on the base branch's worktree and its own stack, in this order:
+
+1. **Bring `main` in once:** `git fetch origin && git merge origin/main`, then migrations on dev and test.
+2. **Gate** (§5): `gate.sh`. It comes before the suites because its `--fix` (PHP-CS-Fixer's risky rules, Prettier,
+   ESLint) changes code the suites must then test.
+3. **The full local tests:** the whole PHPUnit suite and the whole Vitest suite, green.
+4. **Security audit** (§6) of the whole feature (`audit.py` against `main`). If its fixes change code, run step 3
+   again.
+5. **Verify** (§7): every item's screens opened in the browser on this stack.
+6. **Regression run** (§8): the whole smoke suite until green, then the manual run.
+7. **Finish** (§9) and one pull request from the base branch.
+8. **Definition of done:** `dod.py` (without `--item`).
+
+**Fixes go on the base branch.** Item worktrees are stale by now and are not reopened: the coordinator fixes what the
+suites, the audit or the runs find on the base branch, or launches an agent in the base branch's worktree.
+
+**Which item broke it?** When a failure in step 3 is not obvious, bisect over the merges only:
+`git bisect start --first-parent <base-branch> <commit-before-the-first-item-merge>`, with the failing test as the
+check at each step. The commit it names is the merge of the item that brought the failure.

@@ -14,8 +14,10 @@ The whole process, in order:
 
 1. **Stack:** the tools every step below relies on.
 2. **Plan:** write down what the feature does, which layers it touches and how it will be checked. When it is big,
-   split it into items built in parallel after a contract item (§2b). The plan is written by the most advanced
-   model, which also sets the model each item's agent runs on.
+   split it into items built in parallel after a contract item (§2b): each item is merged into the feature base
+   branch as soon as it is built, the base branch waits until every item is merged, and only then do the full
+   tests and steps 5–9 run, once. The plan is written by the most advanced model, which also sets the model each
+   item's agent runs on.
 3. **Branch:** create a feature base branch from a fresh `main` (or `master`) in its own worktree.
 4. **Build test-first:** in the backend as a Senior PHP/Symfony developer, following DDD; in the frontend as a
    React UI/UX engineer, following Feature-Sliced Design.

@@ -6,13 +6,16 @@ Run from anywhere inside the project's git checkout:
     split.py plan   docs/pdr/prd-<feature>.md                 # check the table, print the waves and each item's model
     split.py start  docs/pdr/prd-<feature>.md <slug>…         # branch + worktree + .env ports for these items
     split.py start  docs/pdr/prd-<feature>.md --wave=1        # … for every item of a wave
-    split.py status docs/pdr/prd-<feature>.md [--check]       # per item: worktree, commits, merged? (--check: exit 1
-                                                              #   while an item is not merged)
+    split.py status docs/pdr/prd-<feature>.md [--check]       # per item: worktree, commits, merged?, and the barrier
+                                                              #   (--check: exit 1 while an item is not merged)
     split.py prompt docs/pdr/prd-<feature>.md <slug>          # the brief for the agent or session building the item
 
 The feature is the PRD's file name without "prd-" (or --feature=<name>); its base branch is feature/<feature>, and
 item <slug> is built on feature/<feature>-<slug> in ../<repo>-<feature>-<slug>. Item 0 is built on the base branch
 itself. `start` refuses an item whose dependencies are not merged into the base branch (--force to override).
+
+An item runs its own tests and the gate, never the whole suites: they run once on the base branch, after the barrier
+(every item merged), followed by the audit, verify, the regression run and the PR.
 
 The table's "Model" column (haiku, sonnet, opus or fable) is the model the item's agent runs on, set by the planner
 for every item but item 0. `plan` and `start` print it: the coordinator passes it when it launches the agent. A plan
@@ -394,10 +397,14 @@ def cmd_status(argv: list[str]) -> int:
         if not merged:
             open_items.append(item.slug)
         print(f'{item.id:>3}  {item.slug:<20} {wave[item.id]:<5} {branch:<45} {ahead:<6} {state}')
-    if '--check' in argv:
-        if open_items:
-            print(f'\nNot merged: {", ".join(open_items)}', file=sys.stderr)
-            return 1
+    if open_items:
+        print(f'\nBarrier: {len(items) - len(open_items)}/{len(items)} merged; waiting for {", ".join(open_items)}.')
+    else:
+        print(f'\nBarrier: every item merged. Next, on {repo.base} (steps/02b-split.md §2b.6): merge origin/main, gate.sh,')
+        print('the whole PHPUnit and Vitest suites, the security audit, verify, the regression run, finish, dod.py.')
+    if '--check' in argv and open_items:
+        print(f'Not merged: {", ".join(open_items)}', file=sys.stderr)
+        return 1
     return 0
 
 
@@ -441,13 +448,17 @@ of another endpoint), stop and report it instead of making the change.
 ({item.cases}). No migration unless the plan names a table only this item owns. After changing a controller or a
 DTO, regenerate `openapi.json` and `api.d.ts` (never edit them).
 
-**Done means:** test-first (step 04), `gate.sh` clean (step 05), the whole PHPUnit and Vitest suites green, your
-screens opened in the browser on this stack with no console errors (step 07.3), your regression cases written into
-`docs/tests/ui-regression.md`, and `dod.py --item` passing. Commit in small steps on `{repo.branch(item)}`. Do not
-merge, push, run the security audit or record a regression run: the coordinator does those once, on the base branch.
+**Done means:** test-first (step 04), **your own tests** green (your test files only: `bin/phpunit <your test
+files>` or `--filter`, `npx vitest run <your files>`), `gate.sh` clean (step 05), your regression cases written into
+`docs/tests/ui-regression.md` (the simple ones as smoke tests in a spec file of your own), and `dod.py --item`
+passing. Commit in small steps on `{repo.branch(item)}`.
 
-**Report back:** what you built per layer, the tests you wrote, the commands' results (gate, suites, dod.py --item),
-anything you could not do, and anything the coordinator must decide or change in the plan.""")
+**Do not** run the whole PHPUnit or Vitest suite, the smoke suite or `dod.py` without `--item`, open your screens in
+the browser, merge, push, run the security audit or record a regression run: the coordinator does all of those
+once, on the base branch, after every item is merged (02b-split.md §2b.6).
+
+**Report back:** what you built per layer, the tests you wrote and ran, the commands' results (your tests, gate,
+dod.py --item), anything you could not do, and anything the coordinator must decide or change in the plan.""")
     return 0
 
 

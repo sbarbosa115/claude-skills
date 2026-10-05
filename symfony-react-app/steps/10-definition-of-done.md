@@ -5,8 +5,9 @@ the audit file, the smoke suite's last recorded attempt and the manual run, the 
 the report.
 
 - [ ] A written plan: role, owning context and FSD slice, layers touched, tests and browser cases, what is left out.
-- [ ] If split (§2b): a split table that `split.py plan` accepts, item 0 built first, every item passing
-      `dod.py --item` on its own stack and merged into the base branch, which then passes everything below once.
+- [ ] If split (§2b): a split table that `split.py plan` accepts, item 0 built first, every item passing its own
+      tests, the gate and `dod.py --item`, and merged into the base branch with the cheap checks. Only once every
+      item is merged (the barrier): `main` merged in, then the gate, the full suites and everything below, once.
 - [ ] Built on `feature/<name>` from a fresh `origin/main` (or `master`), in its own worktree, on its own stack.
 - [ ] Every behaviour has a test written before its code: unit for domain rules, functional for each endpoint
       (happy path, each refusal, wrong role, another tenant gets 404), component tests for UI logic.

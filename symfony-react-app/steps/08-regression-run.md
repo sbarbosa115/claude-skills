@@ -12,7 +12,8 @@ run, and a broken sign-in or a blank screen would spoil every manual case after 
 while a smoke test fails.
 
 **A split feature (§2b)** records one run, on the base branch after every item is merged. Each item writes its
-cases into the suite in the ID range the split table gave it, with its smoke tests passing on its own stack.
+cases into the suite in the ID range the split table gave it, the simple ones as smoke tests it does not run: the
+whole smoke suite first runs on the base branch, after the barrier, the gate and the full tests (§2b.6).
 
 ### 8.0 Which cases are smoke tests
 

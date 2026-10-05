@@ -12,7 +12,8 @@ Name tests as sentences about behaviour (`testAnotherTenantCannotSeeTheRecord`,
 are the real documentation of the rule.
 
 **An item of a split (§2b)** builds only what its row in the split table owns, against the contract item 0 fixed,
-on its own stack. It commits on its own branch and never merges: the coordinator merges it into the base branch.
+on its own stack. It runs its own tests, not the whole suites (those run once, after every item is merged: §2b.6).
+It commits on its own branch and never merges: the coordinator merges it into the base branch.
 
 ### 4.1 Backend: Symfony with DDD and hexagonal layers
 

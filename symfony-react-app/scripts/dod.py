@@ -7,8 +7,9 @@ Run from anywhere inside the project's git checkout, with its Docker stack up:
     python3 ~/.claude/skills/symfony-react-app/scripts/dod.py --quick    # leave out the gate and the test suites
     python3 ~/.claude/skills/symfony-react-app/scripts/dod.py --item     # one item of a split (steps/02b-split.md)
 
-An item is checked against the base branch it was cut from (split.py records it), and without the security audit
-and the regression run: those are done once, on the base branch, which fails while an item of its split is not merged.
+An item is checked against the base branch it was cut from (split.py records it), and without the whole test
+suites, the security audit and the regression run: those are done once, on the base branch, after every item of its
+split is merged (it fails while one is not).
 
 It checks what a script can check and prints the rest as MANUAL items to confirm in the report. Exit 0 only when
 nothing FAILs. Settings: PHP_SERVICE (php), NODE_SERVICE (node), APP_DIR (backend).
@@ -51,7 +52,7 @@ ITEM_MANUAL = [
     'Every behaviour had its test written first; another tenant gets 404 on every new id route',
     'Backend in its bounded context: commands for writes, DomainErrors, handlers never flush, Output DTOs',
     'Frontend in FSD layers with public APIs, types from the API schema, strings through i18n, house components',
-    'The item\'s screens opened in the browser on its own stack, no console errors',
+    'The item\'s own tests (its test files, not the whole suites) run and green',
     'The item\'s regression cases written into docs/tests/ui-regression.md, in its ID range, the simple ones as smoke tests',
 ]
 
@@ -104,8 +105,10 @@ def main() -> int:
         table = '; '.join(l for l in gate.stdout.splitlines() if re.match(r'^\w[\w.-]*\s+(FAIL|MISSING)$', l))
         check('Static analysis gate (gate.sh)', gate.returncode == 0, table)
 
-    # Tests
-    if quick:
+    # Tests: an item runs its own; the whole suites run once on the base branch, after the barrier
+    if item:
+        check('Test suites', None, 'whole suites run once on the base branch, after every item merges')
+    elif quick:
         check('Test suites', None, '--quick')
     else:
         if (root / APP_DIR / 'phpunit.dist.xml').exists() or (root / APP_DIR / 'phpunit.xml.dist').exists():
@@ -146,7 +149,7 @@ def main() -> int:
     # Split: an item is checked on its own; the base branch only once every item is merged
     plan = sh('git', 'config', f'branch.{branch}.splitPlan').stdout.strip()
     if item:
-        check('Security audit and regression run', None, 'done once on the base branch')
+        check('Security audit, browser and regression run', None, 'done once on the base branch, after every item merges')
     elif plan:
         res = sh(sys.executable, str(SCRIPTS / 'split.py'), 'status', plan, '--check')
         check('Every item of the split merged', res.returncode == 0, res.stderr.strip().splitlines()[-1] if res.returncode else plan)
